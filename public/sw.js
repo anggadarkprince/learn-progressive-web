@@ -1,7 +1,7 @@
 importScripts('/src/js/idb.js');
 importScripts('/src/js/utility.js');
 
-const CACHE_STATIC_NAME = 'app-static-v12';
+const CACHE_STATIC_NAME = 'app-static-v5';
 const CACHE_DYNAMIC_NAME = 'app-dynamic-v4';
 const STATIC_FILES = [
     '/',
@@ -69,9 +69,10 @@ function isInArray(string, array) {
     return array.indexOf(cachePath) > -1;
 }
 
+var url = 'https://pwagram-e5226.firebaseio.com/posts.json';
+
 // Cache then dynamic network strategy
 self.addEventListener('fetch', function (event) {
-    var url = 'https://pwagram-e5226.firebaseio.com/posts.json';
     if (event.request.url.indexOf(url) > -1) {
         event.respondWith(
             fetch(event.request)
@@ -178,3 +179,43 @@ self.addEventListener('fetch', function (event) {
     )
 });
 */
+
+
+self.addEventListener('sync', function (event) {
+    console.log('[Service Worker] Background syncing', event);
+    if (event.tag == 'sync-new-posts') {
+        console.log('[Service Worker] Syncing new posts');
+        event.waitUntil(
+            readAllData('sync-posts')
+                .then(function (data) {
+                    for (var dt of data) {
+                        fetch('https://us-central1-pwagram-e5226.cloudfunctions.net/storePostData', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                id: dt.id,
+                                title: dt.title,
+                                location: dt.location,
+                                image: "https://firebasestorage.googleapis.com/v0/b/pwagram-e5226.appspot.com/o/21310226281_c2d8226841_k.jpg?alt=media&token=51c9d8c5-9514-45fd-bdfe-eeaf51da9386"
+                            })
+                        })
+                            .then(function (res) {
+                                console.log('Send data', res);
+                                if (res.ok) {
+                                    res.json()
+                                        .then(function(resData) {
+                                            deleteItemFromData('sync-posts', resData.id);
+                                        });
+                                }
+                            })
+                            .catch(function (err) {
+                                console.log('Error while sending data', err);
+                            });
+                    }
+                })
+        )
+    }
+})
