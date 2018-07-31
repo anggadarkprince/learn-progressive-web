@@ -1,6 +1,7 @@
 const functions = require('firebase-functions');
 var admin = require('firebase-admin');
 var cors = require('cors')({origin: true});
+var webpush = require('web-push');
 
 // // Create and Deploy Your First Cloud Functions
 // // https://firebase.google.com/docs/functions/write-firebase-functions
@@ -26,7 +27,28 @@ exports.storePostData = functions.https.onRequest((request, response) => {
                 image: request.body.image
             })
             .then(function () {
-                response.status(200).json({
+                webpush.setVapidDetails('mailto:anggadarkprince@gmail.com', 'BCDao4vS65_MlYOKwRj4YMjtxC8wOcaTid-8_RPQelH_jnL_-iYbnGCCRvVz3DGZ6hhP6E-PMeTApu7ELYpoIOM', '1fD98WWMJkWtjdDy8qOYHFNxh-x7M11QSRwatUezjWI')
+                return admin.database().ref('subscriptions').once('value');
+            })
+            .then(function (subscriptions) {
+                subscriptions.forEach(function (sub) {
+                    var pushConfig = {
+                        endpoint: sub.val().endpoint,
+                        keys: {
+                            auth: sub.val().keys.auth,
+                            p256dh: sub.val().keys.p256dh
+                        }
+                    }
+                    webpush.sendNotification(pushConfig, JSON.stringify({
+                        title: 'New Post',
+                        content: 'New Post Added!',
+                        openUrl: '/help'
+                    }))
+                        .catch(function (err) {
+                            console.log(err);
+                        });
+                })
+                response.status(201).json({
                     message: 'Data stored',
                     id: request.body.id
                 })

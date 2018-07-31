@@ -1,6 +1,7 @@
 var deferredPrompt;
+var enableNotificationButtons = document.querySelectorAll('.enable-notifications');
 
-if(!window.Promise) {
+if (!window.Promise) {
     window.Promise = Promise;
 }
 
@@ -23,7 +24,108 @@ window.addEventListener('beforeinstallprompt', function (event) {
     return false;
 });
 
+function displayConfirmNotification() {
+    var title = 'Successfully subscribed!';
+    var options = {
+        body: 'You successfully subscribe to out Notification service!',
+        icon: '/src/images/icons/app-icon-96x96.png',
+        image: '/src/images/main-image.jpg',
+        dir: 'ltr',
+        lang: 'en-US', // BCP 47
+        vibrate: [100, 50, 200], // vibration, pause, vibration in millis
+        badge: '/src/images/icons/app-icon-96x96.png',
+        tag: 'confirm-notification',
+        renotify: true,
+        actions: [
+            {
+                action: 'confirm',
+                title: 'Okay',
+                icon: '/src/images/icons/app-icon-96x96.png',
+            },
+            {
+                action: 'cancel',
+                title: 'Cancel',
+                icon: '/src/images/icons/app-icon-96x96.png',
+            }
+        ]
+    }
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.ready
+            .then(function (swreg) {
+                swreg.showNotification(title, options);
+            })
+    } else {
+        new Notification(title, options);
+    }
+}
 
+function configurePushSubscription() {
+    if (!('serviceWorker' in navigator)) {
+        return;
+    }
+
+    var reg;
+    navigator.serviceWorker.ready
+        .then(function (swreg) {
+            reg = swreg;
+            return swreg.pushManager.getSubscription();
+        })
+        .then(function (subscription) {
+            if(subscription === null) {
+                // create new subscription
+                var vapidPublicKey = 'BCDao4vS65_MlYOKwRj4YMjtxC8wOcaTid-8_RPQelH_jnL_-iYbnGCCRvVz3DGZ6hhP6E-PMeTApu7ELYpoIOM';
+                var convertedVapidPublicKey = urlBase64ToUint8Array(vapidPublicKey);
+                return reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidPublicKey
+                });
+            } else {
+                // we have a subscription
+            }
+        })
+        .then(function (newSub) {
+            return fetch('https://pwagram-e5226.firebaseio.com/subscriptions.json', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(newSub)
+            });
+        })
+        .then(function (res) {
+            if(res.ok) {
+                displayConfirmNotification();
+            }
+        })
+        .catch(function (err) {
+            console.log(err);
+        });
+}
+
+function askForNotificationPermission() {
+    Notification.requestPermission(function (result) {
+        console.log('User choice', result);
+        if (result !== 'granted') {
+            console.log('No notification permission granted');
+        } else {
+            configurePushSubscription();
+            //displayConfirmNotification();
+        }
+    });
+}
+
+if ('Notification' in window) {
+    console.log(enableNotificationButtons);
+    for (var i = 0; i < enableNotificationButtons.length; i++) {
+        enableNotificationButtons[i].style.display = 'inline-block';
+        enableNotificationButtons[i].addEventListener('click', askForNotificationPermission);
+    }
+} else {
+    console.log('Not support notification');
+}
+
+/*
 var promise = new Promise(function (resolve, reject) {
     setTimeout(function () {
         //resolve('This is executed once the timer is done!');
@@ -33,7 +135,6 @@ var promise = new Promise(function (resolve, reject) {
 });
 
 
-/*
 var xhr = new XMLHttpRequest();
 xhr.open('GET', 'https://httpbin.org/ip');
 xhr.responseType = 'json';
