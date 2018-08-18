@@ -1,14 +1,15 @@
 importScripts('/src/js/idb.js');
 importScripts('/src/js/utility.js');
 
-const CACHE_STATIC_NAME = 'app-static-v5';
-const CACHE_DYNAMIC_NAME = 'app-dynamic-v4';
+const CACHE_STATIC_NAME = 'app-static-v18';
+const CACHE_DYNAMIC_NAME = 'app-dynamic-v6';
 const STATIC_FILES = [
     '/',
     '/index.html',
     '/offline.html',
     '/src/js/app.js',
     '/src/js/feed.js',
+    '/src/js/utility.js',
     '/src/js/idb.js',
     '/src/js/promise.js',
     '/src/js/fetch.js',
@@ -188,9 +189,19 @@ self.addEventListener('sync', function (event) {
         event.waitUntil(
             readAllData('sync-posts')
                 .then(function (data) {
+                    console.log(data);
                     for (var dt of data) {
+                        var postData = new FormData();
+                        postData.append('id', dt.id);
+                        postData.append('title', dt.title);
+                        postData.append('location', dt.location);
+                        postData.append('rawLocationLat', dt.rawLocation.lat);
+                        postData.append('rawLocationLng', dt.rawLocation.lng);
+                        postData.append('file', dt.picture, dt.id + '.png');
+
                         fetch('https://us-central1-pwagram-e5226.cloudfunctions.net/storePostData', {
                             method: 'POST',
+                            /*
                             headers: {
                                 'Content-Type': 'application/json',
                                 'Accept': 'application/json'
@@ -201,6 +212,8 @@ self.addEventListener('sync', function (event) {
                                 location: dt.location,
                                 image: "https://firebasestorage.googleapis.com/v0/b/pwagram-e5226.appspot.com/o/21310226281_c2d8226841_k.jpg?alt=media&token=51c9d8c5-9514-45fd-bdfe-eeaf51da9386"
                             })
+                            */
+                            body: postData
                         })
                             .then(function (res) {
                                 console.log('Send data', res);
@@ -215,6 +228,9 @@ self.addEventListener('sync', function (event) {
                                 console.log('Error while sending data', err);
                             });
                     }
+                })
+                .catch(function (err) {
+                    console.log('error fetch sync-data', err);
                 })
         );
     }
@@ -238,10 +254,10 @@ self.addEventListener('notificationclick', function (event) {
                         return c.visibilityState === 'visible';
                     });
 
-                    if (client !== undefined){
+                    if (client !== undefined) {
                         client.navigate(notification.data.url);
                         client.focus();
-                    }  else {
+                    } else {
                         clients.openWindow(notification.data.url);
                     }
                     notification.close();
@@ -267,8 +283,8 @@ self.addEventListener('push', function (event) {
         data: {
             url: data.openUrl
         }
-    }
+    };
     event.waitUntil(
         self.registration.showNotification(data.title, options)
     );
-})
+});

@@ -5,12 +5,98 @@ var sharedMomentsArea = document.querySelector('#shared-moments');
 var form = document.querySelector('form');
 var titleInput = document.querySelector('#title');
 var locationInput = document.querySelector('#location');
+var videoPlayer = document.querySelector('#player');
+var canvasElement = document.querySelector('#canvas');
+var captureButton = document.querySelector('#capture-btn');
+var imagePicker = document.querySelector('#image-picker');
+var imagePickerArea = document.querySelector('#pick-image');
+var picture;
+var locationBtn = document.querySelector('#location-btn');
+var locationLoader = document.querySelector('#location-loader');
+var fetchedLocation = {lat: 0, lng: 0};
+
+locationBtn.addEventListener('click', function (event) {
+    if (!('geolocation' in navigator)) {
+        return;
+    }
+    var isAlertShown = false;
+
+    locationBtn.style.display = 'none';
+    locationLoader.style.display = 'block';
+
+    navigator.geolocation.getCurrentPosition(function (position) {
+        locationBtn.style.display = 'inline';
+        locationLoader.style.display = 'none';
+        fetchedLocation = {lat: position.coords.latitude, lng: position.coords.longitude};
+        locationInput.value = 'In indonesia ' + fetchedLocation.lat;
+        locationInput.classList.add('is-focused');
+    }, function (err) {
+        console.log(err);
+        locationBtn.style.display = 'inline';
+        locationLoader.style.display = 'none';
+        if(!isAlertShown) {
+            alert('Couldn\'t fetch location, please enter manually!');
+            isAlertShown = true;
+        }
+        fetchedLocation = {lat: 0, lng: 0};
+    }, {timeout: 8000});
+});
+
+function initializeLocation() {
+    if (!('geolocation' in navigator)) {
+        locationBtn.style.display = 'none';
+    }
+}
+
+function initializeMedia() {
+    if (!('mediaDevices' in navigator)) {
+        navigator.mediaDevices = {};
+    }
+    if (!('getUserMedia' in navigator.mediaDevices)) {
+        navigator.mediaDevices.getUserMedia = function (constraints) {
+            var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+            if (!getUserMedia) {
+                return Promise.reject(new Error('getUserMedia is not implemented!'));
+            }
+            return new Promise(function (resolve, reject) {
+                getUserMedia.call(navigator, constraints, resolve, reject);
+            });
+        }
+    }
+
+    navigator.mediaDevices.getUserMedia({video: true})
+        .then(function (stream) {
+            videoPlayer.srcObject = stream;
+            videoPlayer.style.display = 'block';
+        })
+        .catch(function () {
+            imagePickerArea.style.display = 'block';
+        })
+}
+
+captureButton.addEventListener('click', function (event) {
+    canvasElement.style.display = 'block';
+    videoPlayer.style.display = 'none';
+    captureButton.style.display = 'none';
+    var context = canvasElement.getContext('2d');
+    context.drawImage(videoPlayer, 0, 0, canvasElement.width, videoPlayer.videoHeight / (videoPlayer.videoWidth / canvasElement.width));
+    videoPlayer.srcObject.getVideoTracks().forEach(function (track) {
+        track.stop();
+    });
+    picture = dataURItoBlob(canvasElement.toDataURL());
+});
+
+imagePicker.addEventListener('change', function (event) {
+    picture = event.target.files[0];
+});
 
 function openCreatePostModal() {
     createPostArea.style.display = 'block';
     setTimeout(function () {
         createPostArea.style.transform = 'translateY(0)';
     }, 1);
+    initializeMedia();
+    initializeLocation();
     if (deferredPrompt) {
         deferredPrompt.prompt();
 
@@ -42,7 +128,20 @@ function openCreatePostModal() {
 
 function closeCreatePostModal() {
     //createPostArea.style.display = 'none';
-    createPostArea.style.transform = 'translateY(100vh)';
+    videoPlayer.style.display = 'none';
+    imagePickerArea.style.display = 'none';
+    canvasElement.style.display = 'none';
+    locationBtn.style.display = 'inline';
+    locationLoader.style.display = 'none';
+    captureButton.style.display = 'inline';
+    if (videoPlayer.srcObject) {
+        videoPlayer.srcObject.getVideoTracks().forEach(function (track) {
+            track.stop();
+        })
+    }
+    setTimeout(function () {
+        createPostArea.style.transform = 'translateY(100vh)';
+    }, 1);
 }
 
 shareImageButton.addEventListener('click', openCreatePostModal);
@@ -129,8 +228,18 @@ if ('indexedDB' in window) {
 }
 
 function sendData() {
+    var id = new Date().toISOString();
+    var postData = new FormData();
+    postData.append('id', id);
+    postData.append('title', titleInput.value);
+    postData.append('location', locationInput.value);
+    postData.append('rawLocationLat', fetchedLocation.lat);
+    postData.append('rawLocationLng', fetchedLocation.lng);
+    postData.append('file', picture, id + '.png');
+
     fetch('https://us-central1-pwagram-e5226.cloudfunctions.net/storePostData', {
         method: 'POST',
+        /*
         headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json'
@@ -141,6 +250,8 @@ function sendData() {
             location: locationInput.value,
             image: "https://firebasestorage.googleapis.com/v0/b/pwagram-e5226.appspot.com/o/21310226281_c2d8226841_k.jpg?alt=media&token=51c9d8c5-9514-45fd-bdfe-eeaf51da9386"
         })
+        */
+        body: postData
     })
         .then(function (res) {
             console.log('Send data', res);
@@ -160,7 +271,9 @@ form.addEventListener('submit', function (event) {
             var post = {
                 id: new Date().toISOString(),
                 title: titleInput.value,
-                location: locationInput.value
+                location: locationInput.value,
+                picture: picture,
+                rawLocation: fetchedLocation
             }
             writeData('sync-posts', post)
                 .then(function () {
