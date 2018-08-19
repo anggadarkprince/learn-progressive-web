@@ -32,6 +32,7 @@ exports.storePostData = functions.https.onRequest(function(request, response) {
         var uuid = UUID();
         var formData = new formidable.IncomingForm();
         formData.parse(request, function (err, fields, files) {
+            console.log('fields', fields);
             console.log('files', files);
             fs.rename(files.file.path, '/tmp/' + files.file.name);
             var bucket = gcs.bucket('pwagram-e5226.appspot.com');
